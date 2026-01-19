@@ -385,6 +385,15 @@ st.markdown("---")
 
 # Monthly breakdown table - for forecast only
 if len(forecast_df) > 0:
+
+    st.info(
+        "**📌 Catatan Sumber Data:**\n\n"
+        "• **Titik Panas**: Hasil prediksi model LSTM berdasarkan data historis MODIS/VIIRS 2014-2024\n\n"
+        "• **Curah Hujan**: Data disimulasikan berdasarkan pola musiman historis Kabupaten Kuburaya. "
+        "Simulasi menggunakan rata-rata curah hujan musim kemarau (~120 mm) dan musim hujan (~280 mm) "
+        "dengan mempertimbangkan korelasi terhadap jumlah titik panas prediksi."
+    )
+
     st.subheader("📋 Detail Bulanan Prediksi 2025")
     monthly_summary = forecast_df.groupby('tanggal').agg({
         'titik_panas': 'sum',
