@@ -488,7 +488,7 @@ st.markdown("""
 - Data cuaca: Kabupaten Kuburaya  
 - Prediksi: Model LSTM untuk tahun 2025
 - Cakupan: 25 tiles di Kabupaten Kuburaya
-- Sumber: MODIS/VIIRS & Kuburaya Dalam Angka
+- Sumber: SiPongi KLHK & Kuburaya Dalam Angka
 
 """)
 
