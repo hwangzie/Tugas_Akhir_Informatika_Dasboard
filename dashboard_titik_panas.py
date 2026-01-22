@@ -470,12 +470,7 @@ if page == "📊 Ringkasan Eksekutif":
         size='titik_panas',
         color='tingkat_risiko',
         hover_name='area',
-        hover_data={
-            'titik_panas': ':,.0f',
-            'tingkat_risiko': True,
-            'latitude': False,
-            'longitude': False
-        },
+        hover_data=['titik_panas', 'tingkat_risiko'],
         color_discrete_map={
             'Rendah': '#2ecc71',
             'Sedang': '#f39c12', 
