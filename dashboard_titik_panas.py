@@ -14,6 +14,20 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Mapping tile ID to location names
+TILE_LOCATION_MAP = {
+    1: "Blok Sungai Kakap 1", 2: "Blok Sungai Kakap 2", 3: "Blok Sungai Kakap 3",
+    4: "Blok Sungai Kakap 4", 5: "Blok Sungai Kakap 5",
+    6: "Blok Teluk Pakedai 1", 7: "Blok Teluk Pakedai 2", 8: "Blok Teluk Pakedai 3",
+    9: "Blok Teluk Pakedai 4", 10: "Blok Teluk Pakedai 5",
+    11: "Blok Sungai Raya 1", 12: "Blok Sungai Raya 2", 13: "Blok Sungai Raya 3",
+    14: "Blok Sungai Raya 4", 15: "Blok Sungai Raya 5",
+    16: "Blok Batu Ampar 1", 17: "Blok Batu Ampar 2", 18: "Blok Batu Ampar 3",
+    19: "Blok Batu Ampar 4", 20: "Blok Batu Ampar 5",
+    21: "Blok Kubu 1", 22: "Blok Kubu 2", 23: "Blok Kubu 3",
+    24: "Blok Kubu 4", 25: "Blok Kubu 5"
+}
+
 # Fungsi untuk load data real
 @st.cache_data
 def load_real_data():
@@ -113,8 +127,8 @@ def load_real_data():
             lat = (tile_info['lat_top_left'] + tile_info['lat_bottom_left']) / 2
             lon = (tile_info['lon_top_left'] + tile_info['lon_bottom_left']) / 2
             
-            # Generate area name based on grid position
-            area_name = f"Tile {tile_num}"
+            # Use location name mapping
+            area_name = TILE_LOCATION_MAP.get(tile_num, f"Tile {tile_num}")
             
             # Use real weather data if available, otherwise simulate
             if real_weather.get('rainfall') is not None:
@@ -230,25 +244,30 @@ def load_real_data():
 # Load real data
 df = load_real_data()
 
-
-# Sidebar
-st.sidebar.title("🔥 Dashboard Forecasting")
-st.sidebar.markdown("**Prediksi Titik Panas Kabupaten Kuburaya**")
-st.sidebar.markdown("*Kalimantan Barat*")
+# Page Navigation
+st.sidebar.title("Navigasi")
+page = st.sidebar.radio(
+    "Pilih Halaman:",
+    ["📊 Ringkasan Eksekutif", "📋 Detail Data"]
+)
 st.sidebar.markdown("---")
 
+# Filter Panel
+st.sidebar.subheader("Panel Filter")
+
 # Area filter
-st.sidebar.subheader("📍 Filter Area")
+st.sidebar.markdown("**Filter Area/Lokasi**")
 all_areas = sorted(df['area'].unique())
 selected_areas = st.sidebar.multiselect(
-    "Pilih Area/Tile:",
+    "Pilih Lokasi:",
     options=all_areas,
     default=all_areas
 )
 
 # Date range filter - Month based
-st.sidebar.subheader("📅 Rentang Waktu")
-years = sorted(df['tanggal'].dt.year.unique())
+st.sidebar.markdown("**Rentang Waktu**")
+# Filter to show only 2020 onwards for more relevant data
+years = sorted([y for y in df['tanggal'].dt.year.unique() if y >= 2020])
 months = list(range(1, 13))
 month_names = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
                'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
@@ -273,234 +292,368 @@ start_date = pd.Timestamp(year=start_year, month=start_month, day=1)
 end_date = pd.Timestamp(year=end_year, month=end_month, day=1) + pd.offsets.MonthEnd(0)
 filtered_df = filtered_df[(filtered_df['tanggal'] >= start_date) & (filtered_df['tanggal'] <= end_date)]
 
-# Header
-st.title("🔥 Dashboard Forecasting Titik Panas Kabupaten Kuburaya")
-st.markdown("**Prediksi Titik Panas Kabupaten Kuburaya, Kalimantan Barat**")
-st.markdown("---")
-
-# Metrics utama - simplified
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    total_hotspots = filtered_df['titik_panas'].sum()
-    st.metric(
-        label="Total Titik Panas",
-        value=f"{total_hotspots:,.0f}"
-    )
-
-with col2:
-    avg_hotspots = filtered_df.groupby('tanggal')['titik_panas'].sum().mean()
-    st.metric(
-        label="Rata-rata per Bulan",
-        value=f"{avg_hotspots:.1f}"
-    )
-
-with col3:
-    max_month = filtered_df.groupby('tanggal')['titik_panas'].sum().idxmax()
-    st.metric(
-        label="Bulan Puncak",
-        value=max_month.strftime('%B')
-    )
-
-st.markdown("---")
+# Calculate YoY metrics for comparison
+prev_year_start = start_date - pd.DateOffset(years=1)
+prev_year_end = end_date - pd.DateOffset(years=1)
+prev_year_df = df[(df['tanggal'] >= prev_year_start) & (df['tanggal'] <= prev_year_end)]
+if selected_areas:
+    prev_year_df = prev_year_df[prev_year_df['area'].isin(selected_areas)]
 
 # Separate historical and forecast data
 historical_df = filtered_df[filtered_df['tanggal'].dt.year < 2025]
 forecast_df = filtered_df[filtered_df['tanggal'].dt.year == 2025]
 
-# Historical Trend Section
-if len(historical_df) > 0:
-    st.subheader("📊 Trend Titik Panas Historis (Januari 2014 - Desember 2024)")
+# ============================================================================
+# PAGE: RINGKASAN EKSEKUTIF
+# ============================================================================
+if page == "📊 Ringkasan Eksekutif":
+    # Header
+    st.title("Dashboard Forecasting Titik Panas Kabupaten Kuburaya")
+    st.markdown("**Sistem Prakiran dan Monitoring Titik Panas Kabupaten Kuburaya, Kalimantan Barat**")
     
-    # Monthly aggregation for historical
+    # Description and constraints
+    st.info("""
+    **Tentang Dashboard:**
+    
+    Dashboard ini menyediakan analisis dan prakiran titik panas (hotspot) untuk Kabupaten Kuburaya menggunakan model LSTM (Long Short-Term Memory). 
+    Dashboard dirancang untuk membantu pengambilan keputusan dalam mitigasi kebakaran lahan dan hutan.
+    
+    **Fungsi Utama:**
+    - Visualisasi tren historis titik panas (2020-2024)
+    - Prakiran bulanan untuk tahun 2025
+    - Analisis distribusi spasial per lokasi/blok
+    - Kategorisasi tingkat risiko (Rendah, Sedang, Tinggi)
+    
+    **Batasan:**
+    - Data prakiran berbasis model LSTM yang dilatih dengan data historis MODIS/VIIRS (2014-2024)
+    - Akurasi prakiran dapat dipengaruhi oleh faktor eksternal yang tidak terprakiran (anomali cuaca ekstrem, dll)
+    - Data cuaca 2025 merupakan estimasi berdasarkan pola musiman historis
+    - Cakupan: 25 blok area di Kabupaten Kuburaya
+    """)
+    
+    st.markdown("---")
+
+    # KPI Cards with YoY comparison
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        total_hotspots = filtered_df['titik_panas'].sum()
+        prev_total_hotspots = prev_year_df['titik_panas'].sum()
+        yoy_change = 0 if prev_total_hotspots == 0 else ((total_hotspots - prev_total_hotspots) / prev_total_hotspots) * 100
+        
+        st.metric(
+            label="Total Titik Panas",
+            value=f"{total_hotspots:,.0f}",
+            delta=f"{yoy_change:+.1f}% YoY" if prev_total_hotspots > 0 else "N/A"
+        )
+
+    with col2:
+        avg_hotspots = filtered_df.groupby('tanggal')['titik_panas'].sum().mean()
+        prev_avg_hotspots = prev_year_df.groupby('tanggal')['titik_panas'].sum().mean()
+        yoy_avg_change = 0 if prev_avg_hotspots == 0 else ((avg_hotspots - prev_avg_hotspots) / prev_avg_hotspots) * 100
+        
+        st.metric(
+            label="Rata-rata per Bulan",
+            value=f"{avg_hotspots:.1f}",
+            delta=f"{yoy_avg_change:+.1f}% YoY" if prev_avg_hotspots > 0 else "N/A"
+        )
+
+    with col3:
+        monthly_totals = filtered_df.groupby('tanggal')['titik_panas'].sum()
+        max_month = monthly_totals.idxmax()
+        max_month_value = monthly_totals.max()
+        
+        st.metric(
+            label="Bulan Puncak",
+            value=max_month.strftime('%B %Y'),
+            delta=f"{max_month_value:,.0f} titik panas"
+        )
+
+    st.markdown("---")
+
+    # Combined Historical and Forecast Chart
+    st.subheader("Tren Titik Panas: Data Historis vs Prakiran")
+    
+    # Monthly aggregation
     monthly_historical = historical_df.groupby('tanggal').agg({
         'titik_panas': 'sum',
         'curah_hujan': 'mean'
     }).reset_index()
     
-    # Historical line chart
-    fig_historical = go.Figure()
-    
-    fig_historical.add_trace(go.Scatter(
-        x=monthly_historical['tanggal'],
-        y=monthly_historical['titik_panas'],
-        mode='lines+markers',
-        name='Titik Panas Historis',
-        line=dict(color='blue', width=2),
-        marker=dict(size=6)
-    ))
-    
-    fig_historical.update_layout(
-        title="Data Historis Titik Panas (2014-2024)",
-        xaxis_title="Tahun",
-        yaxis_title="Jumlah Titik Panas",
-        height=400,
-        hovermode='x unified',
-        showlegend=False
-    )
-    
-    st.plotly_chart(fig_historical, use_container_width=True)
-    st.markdown("*Data historis digunakan sebagai dasar untuk prediksi 2025*")
-
-st.markdown("---")
-
-# Forecast Section (Main Focus)
-if len(forecast_df) > 0:
-    st.subheader("🔮 Prediksi Titik Panas 2025 (Januari - Desember 2025)")
-    
-    # Monthly aggregation for forecast
     monthly_forecast = forecast_df.groupby('tanggal').agg({
         'titik_panas': 'sum',
         'curah_hujan': 'mean'
     }).reset_index()
     
-    # Forecast line chart
-    fig_forecast = go.Figure()
+    # Combined chart
+    fig_combined = go.Figure()
     
-    fig_forecast.add_trace(go.Scatter(
-        x=monthly_forecast['tanggal'],
-        y=monthly_forecast['titik_panas'],
-        mode='lines+markers',
-        name='Prediksi Titik Panas',
-        line=dict(color='red', width=3),
-        marker=dict(size=10),
-        fill='tonexty',
-        fillcolor='rgba(255, 0, 0, 0.1)'
-    ))
+    # Historical data - solid line
+    if len(monthly_historical) > 0:
+        fig_combined.add_trace(go.Scatter(
+            x=monthly_historical['tanggal'],
+            y=monthly_historical['titik_panas'],
+            mode='lines+markers',
+            name='Realisasi (Historis)',
+            line=dict(color='#1f77b4', width=2),
+            marker=dict(size=6),
+            hovertemplate='<b>Realisasi</b><br>Tanggal: %{x|%B %Y}<br>Titik Panas: %{y:,.0f}<extra></extra>'
+        ))
     
-    fig_forecast.update_layout(
-        title="Prediksi Titik Panas Bulanan 2025",
-        xaxis_title="Bulan",
+    # Forecast data - dashed line with different color
+    if len(monthly_forecast) > 0:
+        fig_combined.add_trace(go.Scatter(
+            x=monthly_forecast['tanggal'],
+            y=monthly_forecast['titik_panas'],
+            mode='lines+markers',
+            name='Prakiran (Forecast)',
+            line=dict(color='#ff7f0e', width=3, dash='dash'),
+            marker=dict(size=8, symbol='diamond'),
+            fill='tozeroy',
+            fillcolor='rgba(255, 127, 14, 0.1)',
+            hovertemplate='<b>Prakiran</b><br>Tanggal: %{x|%B %Y}<br>Titik Panas: %{y:,.0f}<extra></extra>'
+        ))
+    
+    fig_combined.update_layout(
+        title="Perbandingan Data Realisasi dan Prakiran Titik Panas",
+        xaxis_title="Periode",
         yaxis_title="Jumlah Titik Panas",
         height=500,
         hovermode='x unified',
-        showlegend=False
-    )
-    
-    st.plotly_chart(fig_forecast, use_container_width=True)
-else:
-    st.warning("Data prediksi 2025 tidak tersedia dalam filter yang dipilih")
-
-st.markdown("---")
-
-# Monthly breakdown table - for forecast only
-if len(forecast_df) > 0:
-
-    st.info(
-        "**📌 Catatan Sumber Data:**\n\n"
-        "• **Titik Panas**: Hasil prediksi model LSTM berdasarkan data historis MODIS/VIIRS 2014-2024\n\n"
-        "• **Curah Hujan**: Data disimulasikan berdasarkan pola musiman historis Kabupaten Kuburaya. "
-        "Simulasi menggunakan rata-rata curah hujan musim kemarau (~120 mm) dan musim hujan (~280 mm) "
-        "dengan mempertimbangkan korelasi terhadap jumlah titik panas prediksi."
-    )
-
-    st.subheader("📋 Detail Bulanan Prediksi 2025")
-    monthly_summary = forecast_df.groupby('tanggal').agg({
-        'titik_panas': 'sum',
-        'curah_hujan': 'mean'
-    }).reset_index()
-    monthly_summary['Bulan'] = monthly_summary['tanggal'].dt.strftime('%B %Y')
-    monthly_summary['Titik Panas'] = monthly_summary['titik_panas'].round(0).astype(int)
-    monthly_summary['Curah Hujan (mm)'] = monthly_summary['curah_hujan'].round(1)
-    
-    st.dataframe(
-        monthly_summary[['Bulan', 'Titik Panas', 'Curah Hujan (mm)']].set_index('Bulan'),
-        use_container_width=True
-    )
-else:
-    st.info("Pilih tahun 2025 untuk melihat detail prediksi bulanan")
-
-st.markdown("---")
-
-# Map visualization
-st.subheader("Peta Distribusi Spasial")
-
-# If forecast data is available, allow month selection for 2025
-if len(forecast_df) > 0:
-    # Get available months in 2025
-    available_months_2025 = sorted(forecast_df['tanggal'].unique())
-    
-    # Month selector for map
-    col_map1, col_map2 = st.columns([3, 1])
-    with col_map2:
-        selected_map_month = st.selectbox(
-            "Pilih Bulan:",
-            options=available_months_2025,
-            format_func=lambda x: x.strftime('%B %Y'),
-            index=len(available_months_2025)-1  # Default to last month
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
         )
-    
-    # Filter data for selected month
-    map_data = forecast_df[forecast_df['tanggal'] == selected_map_month]
-    
-    fig_map = px.scatter_mapbox(
-        map_data,
-        lat='latitude',
-        lon='longitude',
-        size='titik_panas',
-        color='tingkat_risiko',
-        hover_name='area',
-        hover_data={'titik_panas': True, 'latitude': False, 'longitude': False},
-        color_discrete_map={
-            'Rendah': 'green',
-            'Sedang': 'yellow', 
-            'Tinggi': 'orange',
-            'Sangat Tinggi': 'red'
-        },
-        title=f"Prediksi Sebaran Titik Panas - {selected_map_month.strftime('%B %Y')}",
-        mapbox_style="open-street-map",
-        zoom=10,
-        center={"lat": -0.35, "lon": 109.2}
     )
-else:
-    # Fallback to latest available data if no forecast
-    latest_date = filtered_df['tanggal'].max()
-    map_data = filtered_df[filtered_df['tanggal'] == latest_date]
     
-    fig_map = px.scatter_mapbox(
-        map_data,
-        lat='latitude',
-        lon='longitude',
-        size='titik_panas',
-        color='tingkat_risiko',
-        hover_name='area',
-        hover_data={'titik_panas': True, 'latitude': False, 'longitude': False},
-        color_discrete_map={
-            'Rendah': 'green',
-            'Sedang': 'yellow', 
-            'Tinggi': 'orange',
-            'Sangat Tinggi': 'red'
-        },
-        title=f"Sebaran Titik Panas - {latest_date.strftime('%B %Y')}",
-        mapbox_style="open-street-map",
-        zoom=10,
-        center={"lat": -0.35, "lon": 109.2}
-    )
+    st.plotly_chart(fig_combined, use_container_width=True)
+    
+    st.info("""
+    **Interpretasi Grafik:**
+    - **Garis Biru Solid**: Data realisasi/historis dari pengamatan satelit MODIS/VIIRS
+    - **Garis Oranye Putus-putus**: Prakiran model LSTM untuk periode mendatang
+    - Pola musiman terlihat jelas dengan puncak pada bulan-bulan kemarau (Juli-Oktober)
+    """)
+    
+    st.markdown("---")
 
-fig_map.update_layout(height=700)
-st.plotly_chart(fig_map, use_container_width=True)
+    # Map visualization
+    st.subheader("Peta Distribusi Spasial Titik Panas")
+
+    # Month selector for map
+    if len(forecast_df) > 0:
+        available_months_2025 = sorted(forecast_df['tanggal'].unique())
+        
+        col_map1, col_map2 = st.columns([3, 1])
+        with col_map2:
+            selected_map_month = st.selectbox(
+                "Pilih Bulan:",
+                options=available_months_2025,
+                format_func=lambda x: x.strftime('%B %Y'),
+                index=len(available_months_2025)-1
+            )
+        
+        map_data = forecast_df[forecast_df['tanggal'] == selected_map_month]
+    else:
+        latest_date = filtered_df['tanggal'].max()
+        map_data = filtered_df[filtered_df['tanggal'] == latest_date]
+        selected_map_month = latest_date
+    
+    # Create map with better zoom settings
+    fig_map = px.scatter_mapbox(
+        map_data,
+        lat='latitude',
+        lon='longitude',
+        size='titik_panas',
+        color='tingkat_risiko',
+        hover_name='area',
+        hover_data={
+            'titik_panas': ':,.0f',
+            'tingkat_risiko': True,
+            'latitude': False,
+            'longitude': False
+        },
+        color_discrete_map={
+            'Rendah': '#2ecc71',
+            'Sedang': '#f39c12', 
+            'Tinggi': '#e74c3c',
+            'Sangat Tinggi': '#c0392b'
+        },
+        title=f"Sebaran Risiko Titik Panas - {selected_map_month.strftime('%B %Y')}",
+        mapbox_style="open-street-map",
+        zoom=9.5,  # Adjusted for better view of entire region
+        center={"lat": -0.35, "lon": 109.2},
+        size_max=30
+    )
+    
+    fig_map.update_layout(
+        height=700,
+        mapbox=dict(
+            bearing=0,
+            pitch=0
+        )
+    )
+    
+    st.plotly_chart(fig_map, use_container_width=True)
+    
+    st.markdown("""
+    **Panduan Peta:**
+    - Gunakan scroll mouse untuk **zoom in/out**
+    - Klik dan drag untuk **menggeser peta**
+    - Ukuran lingkaran menunjukkan **jumlah titik panas**
+    - Warna menunjukkan **tingkat risiko**: 🟢 Rendah | 🟡 Sedang | 🔴 Tinggi
+    """)
+
+# ============================================================================
+# PAGE: DETAIL DATA
+# ============================================================================
+elif page == "📋 Detail Data":
+    st.title("Detail Data Prakiraan Titik Panas 2025")
+    st.markdown("**Analisis Detail dan Tabel Data Bulanan**")
+    st.markdown("---")
+    
+    if len(forecast_df) > 0:
+        st.subheader("Ringkasan Bulanan Prakiraan 2025")
+        
+        # Monthly summary with risk categorization
+        monthly_summary = forecast_df.groupby('tanggal').agg({
+            'titik_panas': 'sum',
+            'curah_hujan': 'mean',
+            'tingkat_risiko': lambda x: x.mode()[0] if len(x) > 0 else 'Rendah'
+        }).reset_index()
+        
+        monthly_summary['Bulan'] = monthly_summary['tanggal'].dt.strftime('%B %Y')
+        monthly_summary['Titik Panas'] = monthly_summary['titik_panas'].round(0).astype(int)
+        monthly_summary['Curah Hujan (mm)'] = monthly_summary['curah_hujan'].round(1)
+        monthly_summary['Kategori Risiko'] = monthly_summary['tingkat_risiko']
+        
+        # Get min and max values for conditional formatting
+        min_val = monthly_summary['Titik Panas'].min()
+        max_val = monthly_summary['Titik Panas'].max()
+        
+        # Display table with styling
+        display_df = monthly_summary[['Bulan', 'Titik Panas', 'Curah Hujan (mm)', 'Kategori Risiko']].copy()
+        
+        # Apply conditional formatting using Styler
+        def highlight_values(row):
+            styles = [''] * len(row)
+            if row['Titik Panas'] == min_val:
+                styles[1] = 'background-color: #d4edda; color: #155724; font-weight: bold'
+            elif row['Titik Panas'] == max_val:
+                styles[1] = 'background-color: #f8d7da; color: #721c24; font-weight: bold'
+            
+            # Color code risk category
+            if row['Kategori Risiko'] == 'Tinggi':
+                styles[3] = 'background-color: #f8d7da; color: #721c24; font-weight: bold'
+            elif row['Kategori Risiko'] == 'Sedang':
+                styles[3] = 'background-color: #fff3cd; color: #856404; font-weight: bold'
+            else:
+                styles[3] = 'background-color: #d4edda; color: #155724; font-weight: bold'
+            
+            return styles
+        
+        styled_df = display_df.style.apply(highlight_values, axis=1)
+        
+        st.dataframe(styled_df, use_container_width=True, height=500)
+        
+        st.markdown("""
+        **Legenda Tabel:**
+        - 🟢 **Hijau**: Nilai terendah atau Risiko Rendah
+        - 🔴 **Merah**: Nilai tertinggi atau Risiko Tinggi
+        - 🟡 **Kuning**: Risiko Sedang
+        """)
+        
+        st.markdown("---")
+        
+        # Detailed forecast chart
+        st.subheader("Grafik Detail Prakiraan 2025")
+        
+        fig_detail = go.Figure()
+        
+        fig_detail.add_trace(go.Bar(
+            x=monthly_summary['tanggal'],
+            y=monthly_summary['titik_panas'],
+            name='Prakiraan Titik Panas',
+            marker=dict(
+                color=monthly_summary['titik_panas'],
+                colorscale='Reds',
+                showscale=True,
+                colorbar=dict(title="Jumlah")
+            ),
+            hovertemplate='<b>%{x|%B %Y}</b><br>Titik Panas: %{y:,.0f}<extra></extra>'
+        ))
+        
+        fig_detail.update_layout(
+            title="Prakiran Titik Panas per Bulan (2025)",
+            xaxis_title="Bulan",
+            yaxis_title="Jumlah Titik Panas",
+            height=400,
+            showlegend=False
+        )
+        
+        st.plotly_chart(fig_detail, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Area-wise breakdown
+        st.subheader("Breakdown per Lokasi")
+        
+        area_summary = forecast_df.groupby('area').agg({
+            'titik_panas': 'sum',
+            'tingkat_risiko': lambda x: x.mode()[0] if len(x) > 0 else 'Rendah'
+        }).reset_index()
+        
+        area_summary = area_summary.sort_values('titik_panas', ascending=False)
+        area_summary.columns = ['Lokasi', 'Total Prakiran Titik Panas (2025)', 'Kategori Risiko Dominan']
+        area_summary['Total Prakiran Titik Panas (2025)'] = area_summary['Total Prakiran Titik Panas (2025)'].round(0).astype(int)
+        
+        st.dataframe(area_summary, use_container_width=True, height=400)
+        
+        st.info(
+            "**Catatan Sumber Data:**\n\n"
+            "• **Titik Panas**: Hasil prakiran model LSTM berdasarkan data historis MODIS/VIIRS 2014-2024\n\n"
+            "• **Curah Hujan**: Data disimulasikan berdasarkan pola musiman historis Kabupaten Kuburaya. "
+            "Simulasi menggunakan rata-rata curah hujan musim kemarau (~120 mm) dan musim hujan (~280 mm) "
+            "dengan mempertimbangkan korelasi terhadap jumlah titik panas prakiran.\n\n"
+            "• **Kategori Risiko**: Dihitung berdasarkan threshold dari metode Quartile pada skor risiko prakiran titik panas."
+        )
+    else:
+        st.warning("Data prakiran 2025 tidak tersedia. Silakan sesuaikan filter rentang waktu.")
+        st.info("Pilih tahun 2025 pada filter sidebar untuk melihat data prakiran.")
+
+
 
 # Footer
 st.markdown("---")
 st.markdown("""
-**ℹ️ Informasi Data:**
-- Data historis: MODIS/VIIRS 2014-2024
-- Data cuaca: Kabupaten Kuburaya  
-- Prediksi: Model LSTM untuk tahun 2025
-- Cakupan: 25 tiles di Kabupaten Kuburaya
-- Sumber: SiPongi KLHK & Kuburaya Dalam Angka
-
+**Informasi Dashboard:**
+- **Data Historis**: MODIS/VIIRS 2020-2024 (data yang lebih relevan)
+- **Data Cuaca**: Kabupaten Kuburaya Dalam Angka
+- **Model Prakiran**: LSTM (Long Short-Term Memory)
+- **Periode Prakiran**: Januari - Desember 2025
+- **Cakupan Area**: 25 blok lokasi di Kabupaten Kuburaya
+- **Sumber**: SiPongi KLHK & Kuburaya Dalam Angka 2014-2024
 """)
 
 # Sidebar info
 st.sidebar.markdown("---")
 st.sidebar.info(
-    "**📊 Tentang Dashboard**\n\n"
-    "Dashboard forecasting dengan data:\n"
-    "• 25 tiles area Kabupaten Kuburaya\n"
-    "• Historis 2014-2024\n"
-    "• Prediksi 2025\n\n"
+    "**Informasi Dashboard**\n\n"
+    "**Cakupan Data:**\n"
+    "• 25 blok area Kabupaten Kuburaya\n"
+    "• Historis: 2020-2024\n"
+    "• Prakiran: 2025\n\n"
+    "**Model:**\n"
+    "• LSTM (Long Short-Term Memory)\n"
+    "• Training: Data 2014-2024\n\n"
     "**Sumber Data:**\n"
     "• Titik panas: MODIS/VIIRS\n"
-    "• Cuaca: Kuburaya Dalam Angka"
+    "• Cuaca: Kuburaya Dalam Angka\n\n"
+    "**Kategori Risiko:**\n"
+    "🟢 Rendah\n"
+    "🟡 Sedang\n"
+    "🔴 Tinggi"
 )
