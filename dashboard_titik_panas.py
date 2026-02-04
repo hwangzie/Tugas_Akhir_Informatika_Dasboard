@@ -16,16 +16,16 @@ st.set_page_config(
 
 # Mapping tile ID to location names
 TILE_LOCATION_MAP = {
-    1: "Blok Sungai Kakap 1", 2: "Blok Sungai Kakap 2", 3: "Blok Sungai Kakap 3",
-    4: "Blok Sungai Kakap 4", 5: "Blok Sungai Kakap 5",
-    6: "Blok Teluk Pakedai 1", 7: "Blok Teluk Pakedai 2", 8: "Blok Teluk Pakedai 3",
-    9: "Blok Teluk Pakedai 4", 10: "Blok Teluk Pakedai 5",
-    11: "Blok Sungai Raya 1", 12: "Blok Sungai Raya 2", 13: "Blok Sungai Raya 3",
-    14: "Blok Sungai Raya 4", 15: "Blok Sungai Raya 5",
-    16: "Blok Batu Ampar 1", 17: "Blok Batu Ampar 2", 18: "Blok Batu Ampar 3",
-    19: "Blok Batu Ampar 4", 20: "Blok Batu Ampar 5",
-    21: "Blok Kubu 1", 22: "Blok Kubu 2", 23: "Blok Kubu 3",
-    24: "Blok Kubu 4", 25: "Blok Kubu 5"
+    1: "Blok SK 1", 2: "Blok SK 2", 3: "Blok SK 3",
+    4: "Blok SK 4", 5: "Blok SK 5",
+    6: "Blok TP 1", 7: "Blok TP 2", 8: "Blok TP 3",
+    9: "Blok TP 4", 10: "Blok TP 5",
+    11: "Blok SR 1", 12: "Blok SR 2", 13: "Blok SR 3",
+    14: "Blok SR 4", 15: "Blok SR 5",
+    16: "Blok BA 1", 17: "Blok BA 2", 18: "Blok BA 3",
+    19: "Blok BA 4", 20: "Blok BA 5",
+    21: "Blok KB 1", 22: "Blok KB 2", 23: "Blok KB 3",
+    24: "Blok KB 4", 25: "Blok KB 5"
 }
 
 # Fungsi untuk load data real
@@ -256,6 +256,23 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("Panel Filter")
 
 # Area filter
+
+st.sidebar.markdown("""
+<style>
+    /* Limit multiselect height */
+    div[data-baseweb="select"] > div {
+        max-height: 100px;
+        overflow-y: auto;
+    }
+    
+    /* Style the selected items container */
+    .stMultiSelect [data-baseweb="tag"] {
+        font-size: 12px;
+        padding: 2px 6px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.sidebar.markdown("**Filter Area/Lokasi**")
 all_areas = sorted(df['area'].unique())
 selected_areas = st.sidebar.multiselect(
@@ -267,7 +284,7 @@ selected_areas = st.sidebar.multiselect(
 # Date range filter - Month based
 st.sidebar.markdown("**Rentang Waktu**")
 # Filter to show only 2020 onwards for more relevant data
-years = sorted([y for y in df['tanggal'].dt.year.unique() if y >= 2020])
+years = sorted([y for y in df['tanggal'].dt.year.unique() if y >= 2024])
 months = list(range(1, 13))
 month_names = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
                'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
@@ -353,7 +370,7 @@ if page == "📊 Ringkasan Eksekutif":
         yoy_avg_change = 0 if prev_avg_hotspots == 0 else ((avg_hotspots - prev_avg_hotspots) / prev_avg_hotspots) * 100
         
         st.metric(
-            label="Rata-rata per Bulan",
+            label="Rata-rata Titik Panas per Bulan",
             value=f"{avg_hotspots:.1f}",
             delta=f"{yoy_avg_change:+.1f}% YoY" if prev_avg_hotspots > 0 else "N/A"
         )
@@ -364,7 +381,7 @@ if page == "📊 Ringkasan Eksekutif":
         max_month_value = monthly_totals.max()
         
         st.metric(
-            label="Bulan Puncak",
+            label="Bulan Puncak Titik Panas",
             value=max_month.strftime('%B %Y'),
             delta=f"{max_month_value:,.0f} titik panas"
         )
@@ -479,7 +496,7 @@ if page == "📊 Ringkasan Eksekutif":
         },
         title=f"Sebaran Risiko Titik Panas - {selected_map_month.strftime('%B %Y')}",
         mapbox_style="open-street-map",
-        zoom=9.5,  # Adjusted for better view of entire region
+        zoom=8.5,  # Adjusted for better view of entire region
         center={"lat": -0.35, "lon": 109.2},
         size_max=30
     )
@@ -493,8 +510,20 @@ if page == "📊 Ringkasan Eksekutif":
     )
     
     st.plotly_chart(fig_map, use_container_width=True)
+
+    st.info("""
+    **Legenda Kode Blok:**
+    - **SK** = Sungai Kakap
+    - **TP** = Teluk Pakedai
+    - **SR** = Sungai Raya
+    - **BA** = Batu Ampar
+    - **KB** = Kubu Raya
+    """)
+            
     
     st.markdown("""
+
+    
     **Panduan Peta:**
     - Gunakan scroll mouse untuk **zoom in/out**
     - Klik dan drag untuk **menggeser peta**
@@ -512,7 +541,14 @@ elif page == "📋 Detail Data":
     
     if len(forecast_df) > 0:
         st.subheader("Ringkasan Bulanan Prakiraan 2025")
-        
+        st.info(
+            "**Catatan Sumber Data:**\n\n"
+            "• **Titik Panas**: Hasil prakiran model LSTM berdasarkan data historis MODIS/VIIRS 2014-2024\n\n"
+            "• **Curah Hujan**: Data disimulasikan berdasarkan pola musiman historis Kabupaten Kuburaya. "
+            "Simulasi menggunakan rata-rata curah hujan musim kemarau (~120 mm) dan musim hujan (~280 mm) "
+            "dengan mempertimbangkan korelasi terhadap jumlah titik panas prakiran.\n\n"
+            "• **Kategori Risiko**: Dihitung berdasarkan threshold dari metode Quartile pada skor risiko prakiran titik panas."
+        )
         # Monthly summary with risk categorization
         monthly_summary = forecast_df.groupby('tanggal').agg({
             'titik_panas': 'sum',
@@ -607,14 +643,7 @@ elif page == "📋 Detail Data":
         
         st.dataframe(area_summary, use_container_width=True, height=400)
         
-        st.info(
-            "**Catatan Sumber Data:**\n\n"
-            "• **Titik Panas**: Hasil prakiran model LSTM berdasarkan data historis MODIS/VIIRS 2014-2024\n\n"
-            "• **Curah Hujan**: Data disimulasikan berdasarkan pola musiman historis Kabupaten Kuburaya. "
-            "Simulasi menggunakan rata-rata curah hujan musim kemarau (~120 mm) dan musim hujan (~280 mm) "
-            "dengan mempertimbangkan korelasi terhadap jumlah titik panas prakiran.\n\n"
-            "• **Kategori Risiko**: Dihitung berdasarkan threshold dari metode Quartile pada skor risiko prakiran titik panas."
-        )
+        
     else:
         st.warning("Data prakiran 2025 tidak tersedia. Silakan sesuaikan filter rentang waktu.")
         st.info("Pilih tahun 2025 pada filter sidebar untuk melihat data prakiran.")
