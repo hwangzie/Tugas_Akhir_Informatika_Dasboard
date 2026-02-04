@@ -7,7 +7,7 @@ def load_quartile_thresholds():
     Load quartile thresholds from 2024 data
     """
     # Read the monthly hotspot data
-    df = pd.read_csv('improved_monthly_hotspot_forecasts_2025.csv')
+    df = pd.read_csv('monthly_hotspot_forecasts_2025_new.csv')
     df['year_month'] = pd.to_datetime(df['year_month'])
     df = df.set_index('year_month')
     

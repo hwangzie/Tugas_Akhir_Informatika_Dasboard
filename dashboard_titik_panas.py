@@ -38,7 +38,8 @@ def load_real_data():
     # Load forecast data
     # forecast_df = pd.read_csv('monthly_hotspot_forecasts_2025.csv')
     # forecast_df = pd.read_csv('better_LSTM_monthly_hotspot_forecasts_2025.csv')
-    forecast_df = pd.read_csv('improved_monthly_hotspot_forecasts_2025.csv')
+    # forecast_df = pd.read_csv('improved_monthly_hotspot_forecasts_2025.csv')
+    forecast_df = pd.read_csv('monthly_hotspot_forecasts_2025_new.csv')
     
     # Load categorical forecast data
     categorical_df = pd.read_csv('categorical_forecasts_2025.csv')

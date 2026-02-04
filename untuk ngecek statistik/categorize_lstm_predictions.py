@@ -4,7 +4,7 @@ from apply_categorical_thresholds import categorize_prediction, load_quartile_th
 
 # Load the predictions CSV
 print("Loading predictions from better_LSTM_monthly_hotspot_forecasts_2025.csv...")
-predictions_df = pd.read_csv('improved_monthly_hotspot_forecasts_2025.csv')
+predictions_df = pd.read_csv('monthly_hotspot_forecasts_2025_new.csv')
 # predictions_df = pd.read_csv('monthly_hotspot_forecasts_2025.csv')
 predictions_df['year_month'] = pd.to_datetime(predictions_df['year_month'])
 predictions_df = predictions_df.set_index('year_month')
