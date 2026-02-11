@@ -6,6 +6,12 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import random
 
+def calculate_mape(y_true, y_pred):
+    """Calculate Mean Absolute Percentage Error (MAPE)"""
+    y_true, y_pred = np.array(y_true), np.array(y_pred)
+    non_zero_indices = y_true != 0
+    return np.mean(np.abs((y_true[non_zero_indices] - y_pred[non_zero_indices]) / y_true[non_zero_indices])) * 100
+
 # Konfigurasi halaman
 st.set_page_config(
     page_title="Dashboard Monitoring Titik Panas Kabupaten Kuburaya",
@@ -242,6 +248,30 @@ def load_real_data():
     
     return pd.DataFrame(data_list)
 
+@st.cache_data
+def load_validation_data():
+    """Load data realisasi/aktual tahun 2025 untuk validasi"""
+    try:
+        # Membaca file CSV data asli 2025
+        val_df = pd.read_csv('real_monthly_hotspot_sum2025.csv')
+        
+        # Mengubah format data dari lebar (wide) ke panjang (long) agar cocok dengan data forecast
+        val_melted = val_df.melt(
+            id_vars=['year_month'], 
+            var_name='tile_str', 
+            value_name='titik_panas_aktual'
+        )
+        
+        # Membersihkan kolom tile_id (mengubah 'tile_1' menjadi angka 1)
+        val_melted['tile_id'] = val_melted['tile_str'].str.replace('tile_', '').astype(int)
+        
+        # Mengubah format tanggal
+        val_melted['tanggal'] = pd.to_datetime(val_melted['year_month'])
+        
+        return val_melted[['tanggal', 'tile_id', 'titik_panas_aktual']]
+    except FileNotFoundError:
+        return None
+
 # Load real data
 df = load_real_data()
 
@@ -285,17 +315,22 @@ selected_areas = st.sidebar.multiselect(
 # Date range filter - Month based
 st.sidebar.markdown("**Rentang Waktu**")
 # Filter to show only 2020 onwards for more relevant data
-years = sorted([y for y in df['tanggal'].dt.year.unique() if y >= 2024])
+years = sorted([y for y in df['tanggal'].dt.year.unique() if y >= 2020])
 months = list(range(1, 13))
 month_names = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
                'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
 
+# Default to 2024 if available, otherwise use first/last year
+default_year = 2024
+default_start_idx = years.index(default_year) if default_year in years else 0
+default_end_idx = years.index(default_year+1) if default_year in years else len(years)-1
+
 col1, col2 = st.sidebar.columns(2)
 with col1:
-    start_year = st.selectbox("Tahun Awal:", years, index=0)
+    start_year = st.selectbox("Tahun Awal:", years, index=default_start_idx)
     start_month = st.selectbox("Bulan Awal:", months, format_func=lambda x: month_names[x-1], index=0)
 with col2:
-    end_year = st.selectbox("Tahun Akhir:", years, index=len(years)-1)
+    end_year = st.selectbox("Tahun Akhir:", years, index=default_end_idx)
     end_month = st.selectbox("Bulan Akhir:", months, format_func=lambda x: month_names[x-1], index=11)
 
 # Apply filters
@@ -457,6 +492,154 @@ if page == "📊 Ringkasan Eksekutif":
     """)
     
     st.markdown("---")
+
+    st.title("Evaluasi Akurasi Model Forecasting (2025)")
+    st.markdown("**Perbandingan Data Prakiraan (Forecast) vs Realisasi (Aktual)**")
+    
+    # 1. Load Data
+    validation_df = load_validation_data()
+    
+    if validation_df is None:
+        st.error("File 'real_monthly_hotspot_sum2025.csv' tidak ditemukan. Mohon upload file tersebut.")
+    else:
+        # Ambil data forecast khusus tahun 2025 dari dataset utama
+        forecast_2025 = df[df['tanggal'].dt.year == 2025].copy()
+        
+        # Gabungkan (Merge) data Forecast dan Aktual berdasarkan Tanggal dan Lokasi
+        eval_df = pd.merge(
+            forecast_2025,
+            validation_df,
+            on=['tanggal', 'tile_id'],
+            how='inner',
+            suffixes=('_pred', '_act')
+        )
+        
+        # Filter berdasarkan area yang dipilih di sidebar
+        if selected_areas:
+            eval_df = eval_df[eval_df['area'].isin(selected_areas)]
+            
+        if len(eval_df) > 0:
+            # 2. Perhitungan Error (MAPE & MAE)
+            # Menangani pembagian dengan nol untuk MAPE:
+            # Kita gunakan pendekatan "Safe MAPE" dimana jika nilai aktual 0, dianggap 1 untuk pembagi
+            # agar tidak error infinity. Ini umum untuk data kejadian jarang (count data).
+            
+            y_true = eval_df['titik_panas_aktual']
+            y_pred = eval_df['titik_panas']
+            
+            # Hitung MAE (Mean Absolute Error) - Rata-rata selisih mutlak
+            mae = np.mean(np.abs(y_true - y_pred))
+            
+            # Hitung MAPE (Mean Absolute Percentage Error)
+            # Rumus: Rata-rata dari |(Aktual - Prediksi) / Max(Aktual, 1)| * 100
+            mape_per_point = np.abs((y_true - y_pred) / np.maximum(y_true, 1)) * 100
+            mape = np.mean(mape_per_point)
+            
+            # Hitung Akurasi (100% - MAPE)
+            accuracy = max(0, 100 - mape)
+            
+            # 3. Tampilkan KPI
+            st.markdown("### 📊 Metrik Performa Model")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric(
+                    "MAPE (Tingkat Error)", 
+                    f"{mape:.2f}%", 
+                    help="Rata-rata persentase kesalahan. Semakin KECIL semakin baik."
+                )
+            
+            with col2:
+                st.metric(
+                    "Akurasi Model", 
+                    f"{accuracy:.2f}%", 
+                    help="Estimasi ketepatan prediksi (100% - MAPE)."
+                )
+                
+            with col3:
+                st.metric(
+                    "MAE (Rata-rata Selisih)", 
+                    f"{mae:.2f} titik", 
+                    help="Rata-rata selisih jumlah titik panas (prediksi vs aktual)."
+                )
+                
+            st.markdown("---")
+            
+            # 4. Visualisasi Grafik Perbandingan
+            st.subheader("Tren: Prediksi vs Aktual")
+            
+            # Agregasi per bulan untuk grafik garis
+            monthly_eval = eval_df.groupby('tanggal').agg({
+                'titik_panas': 'sum',
+                'titik_panas_aktual': 'sum'
+            }).reset_index()
+            
+            fig_comp = go.Figure()
+            
+            # Garis Data Aktual
+            fig_comp.add_trace(go.Scatter(
+                x=monthly_eval['tanggal'],
+                y=monthly_eval['titik_panas_aktual'],
+                mode='lines+markers',
+                name='Aktual (Realisasi)',
+                line=dict(color='#2ecc71', width=3), # Hijau
+                marker=dict(size=8)
+            ))
+            
+            # Garis Data Prediksi
+            fig_comp.add_trace(go.Scatter(
+                x=monthly_eval['tanggal'],
+                y=monthly_eval['titik_panas'],
+                mode='lines+markers',
+                name='Prakiraan (Forecast)',
+                line=dict(color='#e74c3c', width=2, dash='dash'), # Merah putus-putus
+                marker=dict(size=6, symbol='x')
+            ))
+            
+            fig_comp.update_layout(
+                title="Perbandingan Jumlah Titik Panas Bulanan (2025)",
+                xaxis_title="Bulan",
+                yaxis_title="Jumlah Titik Panas",
+                hovermode='x unified',
+                height=450
+            )
+            
+            st.plotly_chart(fig_comp, use_container_width=True)
+            
+            # 5. Tabel Detail Error per Bulan
+            st.subheader("Rincian Error per Bulan")
+            
+            # Hitung error per bulan
+            monthly_eval['Selisih (Diff)'] = monthly_eval['titik_panas'] - monthly_eval['titik_panas_aktual']
+            monthly_eval['MAPE Bulanan (%)'] = (
+                np.abs(monthly_eval['Selisih (Diff)']) / 
+                np.maximum(monthly_eval['titik_panas_aktual'], 1) * 100
+            ).round(2)
+            
+            # Format tampilan tabel
+            display_table = monthly_eval.rename(columns={
+                'tanggal': 'Bulan',
+                'titik_panas': 'Prediksi',
+                'titik_panas_aktual': 'Aktual'
+            })
+            
+            display_table['Bulan'] = display_table['Bulan'].dt.strftime('%B %Y')
+            
+            # Styling tabel
+            st.dataframe(
+                display_table.style.background_gradient(subset=['MAPE Bulanan (%)'], cmap='Reds'),
+                use_container_width=True
+            )
+            
+            st.info("""
+            **Catatan Perhitungan MAPE:**
+            Karena data titik panas sering bernilai 0 (nol), perhitungan MAPE menggunakan penyesuaian (Safe MAPE) 
+            dimana pembagi minimal dianggap 1. Hal ini mencegah error pembagian dengan nol dan tetap memberikan 
+            gambaran akurasi yang representatif.
+            """)
+            
+        else:
+            st.warning("Data untuk tahun 2025 tidak ditemukan dalam rentang filter yang dipilih.")
 
     # Map visualization
     st.subheader("Peta Distribusi Spasial Titik Panas")
