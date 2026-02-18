@@ -361,7 +361,7 @@ if selected_areas:
     prev_year_df = prev_year_df[prev_year_df['area'].isin(selected_areas)]
 
 # Separate historical and forecast data
-historical_df = filtered_df[filtered_df['tanggal'].dt.year <= 2026]
+historical_df = filtered_df[filtered_df['tanggal'].dt.year < 2025]
 forecast_df = filtered_df[filtered_df['tanggal'].dt.year == 2025]
 
 # ============================================================================
