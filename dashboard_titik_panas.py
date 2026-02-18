@@ -286,6 +286,14 @@ st.sidebar.markdown("---")
 # Filter Panel
 st.sidebar.subheader("Panel Filter")
 
+st.sidebar.info("""
+    **Legenda Kode Blok:**
+    - **SK** = Sungai Kakap
+    - **TP** = Teluk Pakedai
+    - **SR** = Sungai Raya
+    - **BA** = Batu Ampar
+    - **KB** = Kubu Raya
+    """)
 # Area filter
 
 st.sidebar.markdown("""
@@ -353,7 +361,7 @@ if selected_areas:
     prev_year_df = prev_year_df[prev_year_df['area'].isin(selected_areas)]
 
 # Separate historical and forecast data
-historical_df = filtered_df[filtered_df['tanggal'].dt.year < 2025]
+historical_df = filtered_df[filtered_df['tanggal'].dt.year <= 2026]
 forecast_df = filtered_df[filtered_df['tanggal'].dt.year == 2025]
 
 # ============================================================================
@@ -695,25 +703,7 @@ if page == "📊 Ringkasan Eksekutif":
     
     st.plotly_chart(fig_map, use_container_width=True)
 
-    st.info("""
-    **Legenda Kode Blok:**
-    - **SK** = Sungai Kakap
-    - **TP** = Teluk Pakedai
-    - **SR** = Sungai Raya
-    - **BA** = Batu Ampar
-    - **KB** = Kubu Raya
-    """)
             
-    
-    st.markdown("""
-
-    
-    **Panduan Peta:**
-    - Gunakan scroll mouse untuk **zoom in/out**
-    - Klik dan drag untuk **menggeser peta**
-    - Ukuran lingkaran menunjukkan **jumlah titik panas**
-    - Warna menunjukkan **tingkat risiko**: 🟢 Rendah | 🟡 Sedang | 🔴 Tinggi
-    """)
 
 # ============================================================================
 # PAGE: DETAIL DATA
@@ -836,16 +826,6 @@ elif page == "📋 Detail Data":
 
 # Footer
 st.markdown("---")
-st.markdown("""
-**Informasi Dashboard:**
-- **Data Historis**: MODIS/VIIRS 2020-2024 (data yang lebih relevan)
-- **Data Cuaca**: Kabupaten Kuburaya Dalam Angka
-- **Model Prakiran**: LSTM (Long Short-Term Memory)
-- **Periode Prakiran**: Januari - Desember 2025
-- **Cakupan Area**: 25 blok lokasi di Kabupaten Kuburaya
-- **Sumber**: SiPongi KLHK & Kuburaya Dalam Angka 2014-2024
-""")
-
 # Sidebar info
 st.sidebar.markdown("---")
 st.sidebar.info(
