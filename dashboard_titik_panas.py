@@ -331,7 +331,7 @@ month_names = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
 # Default to 2024 if available, otherwise use first/last year
 default_year = 2024
 default_start_idx = years.index(default_year) if default_year in years else 0
-default_end_idx = years.index(default_year+1) if default_year in years else len(years)-1
+default_end_idx = len(years) - 1  # Default to last year available
 
 col1, col2 = st.sidebar.columns(2)
 with col1:
