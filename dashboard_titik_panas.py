@@ -108,12 +108,17 @@ def load_real_data():
                 risk_level = 'Rendah'
             categorical_lookup[year_month_key][tile_num] = risk_level
     
-    # Combine historical and forecast
+    # Mark data sources before combining
+    historical_df['sumber_data'] = 'Realisasi'
+    forecast_df['sumber_data'] = 'Prakiran'
+    
+    # Combine historical/actual and forecast data
     combined_df = pd.concat([historical_df, forecast_df], ignore_index=True)
     
     # Convert to long format
     data_list = []
     for _, row in combined_df.iterrows():
+        sumber = row.get('sumber_data', 'Realisasi')
         year_month = row['year_month']
         date = pd.to_datetime(year_month)
         year_month_key = date.strftime('%Y-%m')
@@ -243,7 +248,8 @@ def load_real_data():
                 'ispu': ispu,
                 'tingkat_risiko': risk_level,
                 'skor_risiko': risk_score,
-                'musim': 'Kemarau' if is_dry_season else 'Hujan'
+                'musim': 'Kemarau' if is_dry_season else 'Hujan',
+                'sumber_data': sumber
             })
     
     return pd.DataFrame(data_list)
@@ -360,9 +366,9 @@ prev_year_df = df[(df['tanggal'] >= prev_year_start) & (df['tanggal'] <= prev_ye
 if selected_areas:
     prev_year_df = prev_year_df[prev_year_df['area'].isin(selected_areas)]
 
-# Separate historical and forecast data
-historical_df = filtered_df[filtered_df['tanggal'].dt.year < 2025]
-forecast_df = filtered_df[filtered_df['tanggal'].dt.year == 2025]
+# Separate historical/actual and forecast data based on source
+historical_df = filtered_df[filtered_df['sumber_data'] == 'Realisasi']
+forecast_df = filtered_df[filtered_df['sumber_data'] == 'Prakiran']
 
 # ============================================================================
 # PAGE: RINGKASAN EKSEKUTIF
@@ -494,7 +500,7 @@ if page == "📊 Ringkasan Eksekutif":
     
     st.info("""
     **Interpretasi Grafik:**
-    - **Garis Biru Solid**: Data realisasi/historis dari pengamatan satelit MODIS/VIIRS
+    - **Garis Biru Solid**: Data real dari pengamatan satelit MODIS/VIIRS (termasuk data aktual 2025)
     - **Garis Oranye Putus-putus**: Prakiran model LSTM untuk periode mendatang
     - Pola musiman terlihat jelas dengan puncak pada bulan-bulan kemarau (Juli-Oktober)
     """)
@@ -510,8 +516,8 @@ if page == "📊 Ringkasan Eksekutif":
     if validation_df is None:
         st.error("File 'real_monthly_hotspot_sum2025.csv' tidak ditemukan. Mohon upload file tersebut.")
     else:
-        # Ambil data forecast khusus tahun 2025 dari dataset utama
-        forecast_2025 = df[df['tanggal'].dt.year == 2025].copy()
+        # Ambil data forecast (Prakiran) khusus tahun 2025 dari dataset utama
+        forecast_2025 = df[(df['tanggal'].dt.year == 2025) & (df['sumber_data'] == 'Prakiran')].copy()
         
         # Gabungkan (Merge) data Forecast dan Aktual berdasarkan Tanggal dan Lokasi
         eval_df = pd.merge(
@@ -573,48 +579,13 @@ if page == "📊 Ringkasan Eksekutif":
                 
             st.markdown("---")
             
-            # 4. Visualisasi Grafik Perbandingan
-            st.subheader("Tren: Prediksi vs Aktual")
-            
             # Agregasi per bulan untuk grafik garis
             monthly_eval = eval_df.groupby('tanggal').agg({
                 'titik_panas': 'sum',
                 'titik_panas_aktual': 'sum'
             }).reset_index()
             
-            fig_comp = go.Figure()
-            
-            # Garis Data Aktual
-            fig_comp.add_trace(go.Scatter(
-                x=monthly_eval['tanggal'],
-                y=monthly_eval['titik_panas_aktual'],
-                mode='lines+markers',
-                name='Aktual (Realisasi)',
-                line=dict(color='#2ecc71', width=3), # Hijau
-                marker=dict(size=8)
-            ))
-            
-            # Garis Data Prediksi
-            fig_comp.add_trace(go.Scatter(
-                x=monthly_eval['tanggal'],
-                y=monthly_eval['titik_panas'],
-                mode='lines+markers',
-                name='Prakiraan (Forecast)',
-                line=dict(color='#e74c3c', width=2, dash='dash'), # Merah putus-putus
-                marker=dict(size=6, symbol='x')
-            ))
-            
-            fig_comp.update_layout(
-                title="Perbandingan Jumlah Titik Panas Bulanan (2025)",
-                xaxis_title="Bulan",
-                yaxis_title="Jumlah Titik Panas",
-                hovermode='x unified',
-                height=450
-            )
-            
-            st.plotly_chart(fig_comp, use_container_width=True)
-            
-            # 5. Tabel Detail Error per Bulan
+            # 4. Tabel Detail Error per Bulan
             st.subheader("Rincian Error per Bulan")
             
             # Hitung error per bulan
