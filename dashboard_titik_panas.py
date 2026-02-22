@@ -384,18 +384,6 @@ if page == "📊 Ringkasan Eksekutif":
     
     Dashboard ini menyediakan analisis dan prakiran titik panas (hotspot) untuk Kabupaten Kuburaya menggunakan model LSTM (Long Short-Term Memory). 
     Dashboard dirancang untuk membantu pengambilan keputusan dalam mitigasi kebakaran lahan dan hutan.
-    
-    **Fungsi Utama:**
-    - Visualisasi tren historis titik panas (2020-2024)
-    - Prakiran bulanan untuk tahun 2025
-    - Analisis distribusi spasial per lokasi/blok
-    - Kategorisasi tingkat risiko (Rendah, Sedang, Tinggi)
-    
-    **Batasan:**
-    - Data prakiran berbasis model LSTM yang dilatih dengan data historis MODIS/VIIRS (2014-2024)
-    - Akurasi prakiran dapat dipengaruhi oleh faktor eksternal yang tidak terprakiran (anomali cuaca ekstrem, dll)
-    - Data cuaca 2025 merupakan estimasi berdasarkan pola musiman historis
-    - Cakupan: 25 blok area di Kabupaten Kuburaya
     """)
     
     st.markdown("---")
