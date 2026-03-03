@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import random
+from sklearn.metrics import mean_squared_error
 
 def calculate_mape(y_true, y_pred):
     """Calculate Mean Absolute Percentage Error (MAPE)"""
@@ -45,8 +46,8 @@ def load_real_data():
     # forecast_df = pd.read_csv('monthly_hotspot_forecasts_2025.csv')
     # forecast_df = pd.read_csv('better_LSTM_monthly_hotspot_forecasts_2025.csv')
     # forecast_df = pd.read_csv('improved_monthly_hotspot_forecasts_2025.csv')
-    forecast_df = pd.read_csv('monthly_hotspot_forecasts_2025_new.csv')
-    
+    # forecast_df = pd.read_csv('monthly_hotspot_forecasts_2025_new.csv')
+    forecast_df = pd.read_csv('monthly_hotspot_forecasts_2025_hyper.csv')
     # Load categorical forecast data
     categorical_df = pd.read_csv('categorical_forecasts_2025.csv')
     
@@ -521,24 +522,28 @@ if page == "📊 Ringkasan Eksekutif":
             eval_df = eval_df[eval_df['area'].isin(selected_areas)]
             
         if len(eval_df) > 0:
-            # 2. Perhitungan Error (MAPE & MAE)
-            # Menangani pembagian dengan nol untuk MAPE:
-            # Kita gunakan pendekatan "Safe MAPE" dimana jika nilai aktual 0, dianggap 1 untuk pembagi
-            # agar tidak error infinity. Ini umum untuk data kejadian jarang (count data).
+            # 2. Perhitungan Error berdasarkan agregasi bulanan (bukan per tile)
+            # Agregasi per bulan - sum semua tile untuk setiap bulan
+            monthly_eval = eval_df.groupby('tanggal').agg({
+                'titik_panas_aktual': 'sum',  # Total aktual per bulan
+                'titik_panas': 'sum'           # Total prediksi per bulan
+            }).reset_index()
             
-            y_true = eval_df['titik_panas_aktual']
-            y_pred = eval_df['titik_panas']
+            y_true = monthly_eval['titik_panas_aktual']
+            y_pred = monthly_eval['titik_panas']
             
             # Hitung MAE (Mean Absolute Error) - Rata-rata selisih mutlak
             mae = np.mean(np.abs(y_true - y_pred))
             
-            # Hitung MAPE (Mean Absolute Percentage Error)
-            # Rumus: Rata-rata dari |(Aktual - Prediksi) / Max(Aktual, 1)| * 100
-            mape_per_point = np.abs((y_true - y_pred) / np.maximum(y_true, 1)) * 100
-            mape = np.mean(mape_per_point)
+            # Hitung RMSE (Root Mean Square Error)
+            # Rumus Excel: SQRT(SUMXMY2(D2:D13,C2:C13)/COUNT(D2:D13))
+            # Equivalent: SQRT(SUM((Aktual - Prediksi)^2) / COUNT)
+            n = len(y_true)
+            rmse = np.sqrt(np.sum((y_true - y_pred) ** 2) / n)
             
-            # Hitung Akurasi (100% - MAPE)
-            accuracy = max(0, 100 - mape)
+            # Debug: tampilkan data agregasi bulanan
+            st.write("Data Agregasi Bulanan (Aktual vs Prediksi):")
+            st.write(monthly_eval[['tanggal', 'titik_panas_aktual', 'titik_panas']])
             
             # 3. Tampilkan KPI
             st.markdown("### 📊 Metrik Performa Model")
@@ -546,16 +551,18 @@ if page == "📊 Ringkasan Eksekutif":
             
             with col1:
                 st.metric(
-                    "MAPE (Tingkat Error)", 
-                    f"{mape:.2f}%", 
-                    help="Rata-rata persentase kesalahan. Semakin KECIL semakin baik."
+                    "RMSE (Tingkat Error)", 
+                    f"{rmse:.2f}", 
+                    help="Root Mean Square Error. Semakin KECIL semakin baik."
                 )
             
             with col2:
+            # rmse per tile (optional, can be added if needed)
+                rmse_per_tile = np.sqrt(np.mean((eval_df['titik_panas_aktual'] - eval_df['titik_panas']) ** 2))
                 st.metric(
-                    "Akurasi Model", 
-                    f"{accuracy:.2f}%", 
-                    help="Estimasi ketepatan prediksi (100% - MAPE)."
+                    "RMSE per Tile",
+                    f"{rmse_per_tile:.2f}",
+                    help="RMSE dihitung per tile, kemudian dirata-rata. Memberikan gambaran error rata-rata per lokasi."
                 )
                 
             with col3:
@@ -567,42 +574,10 @@ if page == "📊 Ringkasan Eksekutif":
                 
             st.markdown("---")
             
-            # Agregasi per bulan untuk grafik garis
-            monthly_eval = eval_df.groupby('tanggal').agg({
-                'titik_panas': 'sum',
-                'titik_panas_aktual': 'sum'
-            }).reset_index()
-            
-            # 4. Tabel Detail Error per Bulan
-            st.subheader("Rincian Error per Bulan")
-            
-            # Hitung error per bulan
-            monthly_eval['Selisih (Diff)'] = monthly_eval['titik_panas'] - monthly_eval['titik_panas_aktual']
-            monthly_eval['MAPE Bulanan (%)'] = (
-                np.abs(monthly_eval['Selisih (Diff)']) / 
-                np.maximum(monthly_eval['titik_panas_aktual'], 1) * 100
-            ).round(2)
-            
-            # Format tampilan tabel
-            display_table = monthly_eval.rename(columns={
-                'tanggal': 'Bulan',
-                'titik_panas': 'Prediksi',
-                'titik_panas_aktual': 'Aktual'
-            })
-            
-            display_table['Bulan'] = display_table['Bulan'].dt.strftime('%B %Y')
-            
-            # Styling tabel
-            st.dataframe(
-                display_table.style.background_gradient(subset=['MAPE Bulanan (%)'], cmap='Reds'),
-                use_container_width=True
-            )
-            
             st.info("""
-            **Catatan Perhitungan MAPE:**
-            Karena data titik panas sering bernilai 0 (nol), perhitungan MAPE menggunakan penyesuaian (Safe MAPE) 
-            dimana pembagi minimal dianggap 1. Hal ini mencegah error pembagian dengan nol dan tetap memberikan 
-            gambaran akurasi yang representatif.
+            **Catatan Perhitungan RMSE:**
+            RMSE (Root Mean Square Error) mengukur rata-rata akar kuadrat dari selisih antara nilai prediksi dan aktual.
+            Semakin kecil nilai RMSE, semakin baik performa model.
             """)
             
         else:
