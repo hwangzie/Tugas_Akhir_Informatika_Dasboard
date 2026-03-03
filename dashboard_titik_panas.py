@@ -542,8 +542,8 @@ if page == "📊 Ringkasan Eksekutif":
             rmse = np.sqrt(np.sum((y_true - y_pred) ** 2) / n)
             
             # Debug: tampilkan data agregasi bulanan
-            st.write("Data Agregasi Bulanan (Aktual vs Prediksi):")
-            st.write(monthly_eval[['tanggal', 'titik_panas_aktual', 'titik_panas']])
+            # st.write("Data Agregasi Bulanan (Aktual vs Prediksi):")
+            # st.write(monthly_eval[['tanggal', 'titik_panas_aktual', 'titik_panas']])
             
             # 3. Tampilkan KPI
             st.markdown("### 📊 Metrik Performa Model")
