@@ -111,7 +111,7 @@ def load_real_data():
     
     # Mark data sources before combining
     historical_df['sumber_data'] = 'Realisasi'
-    forecast_df['sumber_data'] = 'Prakiran'
+    forecast_df['sumber_data'] = 'prakiraan'
     
     # Combine historical/actual and forecast data
     combined_df = pd.concat([historical_df, forecast_df], ignore_index=True)
@@ -335,10 +335,10 @@ months = list(range(1, 13))
 month_names = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
                'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
 
-# Default to 2024 if available, otherwise use first/last year
-default_year = 2024
-default_start_idx = years.index(default_year) if default_year in years else 0
-default_end_idx = len(years) - 1  # Default to last year available
+# Default to last available year (single year view for correct YoY)
+default_year = years[-1]  # Last available year (e.g. 2025)
+default_start_idx = years.index(default_year)
+default_end_idx = years.index(default_year)
 
 col1, col2 = st.sidebar.columns(2)
 with col1:
@@ -369,66 +369,123 @@ if selected_areas:
 
 # Separate historical/actual and forecast data based on source
 historical_df = filtered_df[filtered_df['sumber_data'] == 'Realisasi']
-forecast_df = filtered_df[filtered_df['sumber_data'] == 'Prakiran']
+realisasi_df = filtered_df[filtered_df['sumber_data'] == 'Realisasi']
+forecast_df = filtered_df[filtered_df['sumber_data'] == 'prakiraan']
 
 # ============================================================================
 # PAGE: RINGKASAN EKSEKUTIF
 # ============================================================================
-if page == "📊 Ringkasan Eksekutif":
+if page == "Ringkasan Eksekutif":
     # Header
     st.title("Dashboard Forecasting Titik Panas Kabupaten Kuburaya")
-    st.markdown("**Sistem Prakiran dan Monitoring Titik Panas Kabupaten Kuburaya, Kalimantan Barat**")
+    st.markdown("**Sistem Prakiraan dan Monitoring Titik Panas Kabupaten Kuburaya, Kalimantan Barat**")
     
     # Description and constraints
     st.info("""
     **Tentang Dashboard:**
     
-    Dashboard ini menyediakan analisis dan prakiran titik panas (hotspot) untuk Kabupaten Kuburaya menggunakan model LSTM (Long Short-Term Memory). 
+    Dashboard ini menyediakan analisis dan prakiraan titik panas (hotspot) untuk Kabupaten Kuburaya menggunakan model LSTM (Long Short-Term Memory). 
     Dashboard dirancang untuk membantu pengambilan keputusan dalam mitigasi kebakaran lahan dan hutan.
     """)
     
     st.markdown("---")
 
-    # KPI Cards with YoY comparison
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        total_hotspots = filtered_df['titik_panas'].sum()
-        prev_total_hotspots = prev_year_df['titik_panas'].sum()
-        yoy_change = 0 if prev_total_hotspots == 0 else ((total_hotspots - prev_total_hotspots) / prev_total_hotspots) * 100
+    # KPI Cards - Realisasi vs Forecast comparison
+    # Calculate realisasi metrics
+    realisasi_filtered = filtered_df[filtered_df['sumber_data'] == 'Realisasi']
+    forecast_filtered = filtered_df[filtered_df['sumber_data'] == 'prakiraan']
+    
+    has_realisasi = len(realisasi_filtered) > 0
+    has_forecast = len(forecast_filtered) > 0
+    
+    # --- Row 1: Realisasi ---
+    if has_realisasi:
+        st.markdown("#### 📊 Data Realisasi")
+        col1, col2, col3 = st.columns(3)
         
-        st.metric(
-            label="Total Titik Panas",
-            value=f"{total_hotspots:,.0f}",
-            delta=f"{yoy_change:+.1f}% YoY" if prev_total_hotspots > 0 else "N/A"
-        )
+        with col1:
+            total_realisasi = realisasi_filtered['titik_panas'].sum()
+            prev_total_hotspots = prev_year_df[prev_year_df['sumber_data'] == 'Realisasi']['titik_panas'].sum()
+            yoy_change = 0 if prev_total_hotspots == 0 else ((total_realisasi - prev_total_hotspots) / prev_total_hotspots) * 100
+            
+            st.metric(
+                label="Total Titik Panas (Realisasi)",
+                value=f"{total_realisasi:,.0f}",
+                delta=f"{yoy_change:+.1f}% YoY" if prev_total_hotspots > 0 else "N/A"
+            )
 
-    with col2:
-        avg_hotspots = filtered_df.groupby('tanggal')['titik_panas'].sum().mean()
-        prev_avg_hotspots = prev_year_df.groupby('tanggal')['titik_panas'].sum().mean()
-        yoy_avg_change = 0 if prev_avg_hotspots == 0 else ((avg_hotspots - prev_avg_hotspots) / prev_avg_hotspots) * 100
-        
-        st.metric(
-            label="Rata-rata Titik Panas per Bulan",
-            value=f"{avg_hotspots:.1f}",
-            delta=f"{yoy_avg_change:+.1f}% YoY" if prev_avg_hotspots > 0 else "N/A"
-        )
+        with col2:
+            monthly_real = realisasi_filtered.groupby('tanggal')['titik_panas'].sum()
+            avg_realisasi = monthly_real.mean()
+            prev_real = prev_year_df[prev_year_df['sumber_data'] == 'Realisasi']
+            prev_avg = prev_real.groupby('tanggal')['titik_panas'].sum().mean() if len(prev_real) > 0 else 0
+            yoy_avg = 0 if prev_avg == 0 else ((avg_realisasi - prev_avg) / prev_avg) * 100
+            
+            st.metric(
+                label="Rata-rata per Bulan (Realisasi)",
+                value=f"{avg_realisasi:.1f}",
+                delta=f"{yoy_avg:+.1f}% YoY" if prev_avg > 0 else "N/A"
+            )
 
-    with col3:
-        monthly_totals = filtered_df.groupby('tanggal')['titik_panas'].sum()
-        max_month = monthly_totals.idxmax()
-        max_month_value = monthly_totals.max()
+        with col3:
+            if len(monthly_real) > 0:
+                max_month_real = monthly_real.idxmax()
+                max_val_real = monthly_real.max()
+                st.metric(
+                    label="Bulan Puncak (Realisasi)",
+                    value=max_month_real.strftime('%B %Y'),
+                    delta=f"{max_val_real:,.0f} titik panas"
+                )
+    
+    # --- Row 2: Forecast ---
+    if has_forecast:
+        st.markdown("#### 🔮 Data Prakiraan (Forecast)")
+        col1, col2, col3 = st.columns(3)
         
-        st.metric(
-            label="Bulan Puncak Titik Panas",
-            value=max_month.strftime('%B %Y'),
-            delta=f"{max_month_value:,.0f} titik panas"
-        )
+        with col1:
+            total_forecast = forecast_filtered['titik_panas'].sum()
+            # Delta: perbandingan forecast vs realisasi
+            if has_realisasi and total_realisasi > 0:
+                diff_pct = ((total_forecast - total_realisasi) / total_realisasi) * 100
+                delta_text = f"{diff_pct:+.1f}% vs Realisasi"
+            else:
+                delta_text = "N/A"
+            
+            st.metric(
+                label="Total Titik Panas (Forecast)",
+                value=f"{total_forecast:,.0f}",
+                delta=delta_text
+            )
+
+        with col2:
+            monthly_fcast = forecast_filtered.groupby('tanggal')['titik_panas'].sum()
+            avg_forecast = monthly_fcast.mean()
+            if has_realisasi and avg_realisasi > 0:
+                diff_avg_pct = ((avg_forecast - avg_realisasi) / avg_realisasi) * 100
+                delta_avg_text = f"{diff_avg_pct:+.1f}% vs Realisasi"
+            else:
+                delta_avg_text = "N/A"
+            
+            st.metric(
+                label="Rata-rata per Bulan (Forecast)",
+                value=f"{avg_forecast:.1f}",
+                delta=delta_avg_text
+            )
+
+        with col3:
+            if len(monthly_fcast) > 0:
+                max_month_fcast = monthly_fcast.idxmax()
+                max_val_fcast = monthly_fcast.max()
+                st.metric(
+                    label="Bulan Puncak (Forecast)",
+                    value=max_month_fcast.strftime('%B %Y'),
+                    delta=f"{max_val_fcast:,.0f} titik panas"
+                )
 
     st.markdown("---")
 
     # Combined Historical and Forecast Chart
-    st.subheader("Tren Titik Panas: Data Historis vs Prakiran")
+    st.subheader("Tren Titik Panas: Data Historis vs Prakiraan")
     
     # Monthly aggregation
     monthly_historical = historical_df.groupby('tanggal').agg({
@@ -440,6 +497,28 @@ if page == "📊 Ringkasan Eksekutif":
         'titik_panas': 'sum',
         'curah_hujan': 'mean'
     }).reset_index()
+    
+    # Calculate MAE from validation data for the error band
+    mae_value = None
+    validation_df_for_chart = load_validation_data()
+    if validation_df_for_chart is not None and len(forecast_df) > 0:
+        forecast_2025_chart = df[(df['tanggal'].dt.year == 2025) & (df['sumber_data'] == 'prakiraan')].copy()
+        eval_chart_df = pd.merge(
+            forecast_2025_chart,
+            validation_df_for_chart,
+            on=['tanggal', 'tile_id'],
+            how='inner'
+        )
+        if selected_areas:
+            eval_chart_df = eval_chart_df[eval_chart_df['area'].isin(selected_areas)]
+        if len(eval_chart_df) > 0:
+            monthly_eval_chart = eval_chart_df.groupby('tanggal').agg({
+                'titik_panas_aktual': 'sum',
+                'titik_panas': 'sum'
+            }).reset_index()
+            mae_value = np.mean(np.abs(
+                monthly_eval_chart['titik_panas_aktual'] - monthly_eval_chart['titik_panas']
+            ))
     
     # Combined chart
     fig_combined = go.Figure()
@@ -456,22 +535,48 @@ if page == "📊 Ringkasan Eksekutif":
             hovertemplate='<b>Realisasi</b><br>Tanggal: %{x|%B %Y}<br>Titik Panas: %{y:,.0f}<extra></extra>'
         ))
     
-    # Forecast data - dashed line with different color
+    # Forecast data - dashed line with different color + MAE error band
     if len(monthly_forecast) > 0:
+        # Add MAE shaded error band if MAE is available
+        if mae_value is not None:
+            upper_bound = monthly_forecast['titik_panas'] + mae_value
+            lower_bound = (monthly_forecast['titik_panas'] - mae_value).clip(lower=0)
+            
+            # Upper bound (invisible line)
+            fig_combined.add_trace(go.Scatter(
+                x=monthly_forecast['tanggal'],
+                y=upper_bound,
+                mode='lines',
+                name='Batas Atas (±MAE)',
+                line=dict(width=0),
+                showlegend=False,
+                hovertemplate='<b>Batas Atas</b><br>Tanggal: %{x|%B %Y}<br>Titik Panas: %{y:,.0f}<extra></extra>'
+            ))
+            
+            # Lower bound (invisible line) with fill to upper bound
+            fig_combined.add_trace(go.Scatter(
+                x=monthly_forecast['tanggal'],
+                y=lower_bound,
+                mode='lines',
+                name=f'Rentang Error (±MAE = {mae_value:.1f})',
+                line=dict(width=0),
+                fill='tonexty',
+                fillcolor='rgba(255, 127, 14, 0.2)',
+                hovertemplate='<b>Batas Bawah</b><br>Tanggal: %{x|%B %Y}<br>Titik Panas: %{y:,.0f}<extra></extra>'
+            ))
+        
         fig_combined.add_trace(go.Scatter(
             x=monthly_forecast['tanggal'],
             y=monthly_forecast['titik_panas'],
             mode='lines+markers',
-            name='Prakiran (Forecast)',
+            name='prakiraan (Forecast)',
             line=dict(color='#ff7f0e', width=3, dash='dash'),
             marker=dict(size=8, symbol='diamond'),
-            fill='tozeroy',
-            fillcolor='rgba(255, 127, 14, 0.1)',
-            hovertemplate='<b>Prakiran</b><br>Tanggal: %{x|%B %Y}<br>Titik Panas: %{y:,.0f}<extra></extra>'
+            hovertemplate='<b>prakiraan</b><br>Tanggal: %{x|%B %Y}<br>Titik Panas: %{y:,.0f}<extra></extra>'
         ))
     
     fig_combined.update_layout(
-        title="Perbandingan Data Realisasi dan Prakiran Titik Panas",
+        title="Perbandingan Data Realisasi dan prakiraan Titik Panas",
         xaxis_title="Periode",
         yaxis_title="Jumlah Titik Panas",
         height=500,
@@ -487,10 +592,14 @@ if page == "📊 Ringkasan Eksekutif":
     
     st.plotly_chart(fig_combined, use_container_width=True)
     
-    st.info("""
+    mae_note = ""
+    if mae_value is not None:
+        mae_note = f"\n    - **Area Oranye Transparan**: Rentang error berdasarkan MAE (±{mae_value:.1f} titik panas)"
+    
+    st.info(f"""
     **Interpretasi Grafik:**
     - **Garis Biru Solid**: Data real dari pengamatan satelit MODIS/VIIRS (termasuk data aktual 2025)
-    - **Garis Oranye Putus-putus**: Prakiran model LSTM untuk periode mendatang
+    - **Garis Oranye Putus-putus**: prakiraan model LSTM untuk periode mendatang{mae_note}
     - Pola musiman terlihat jelas dengan puncak pada bulan-bulan kemarau (Juli-Oktober)
     """)
     
@@ -505,8 +614,8 @@ if page == "📊 Ringkasan Eksekutif":
     if validation_df is None:
         st.error("File 'real_monthly_hotspot_sum2025.csv' tidak ditemukan. Mohon upload file tersebut.")
     else:
-        # Ambil data forecast (Prakiran) khusus tahun 2025 dari dataset utama
-        forecast_2025 = df[(df['tanggal'].dt.year == 2025) & (df['sumber_data'] == 'Prakiran')].copy()
+        # Ambil data forecast (prakiraan) khusus tahun 2025 dari dataset utama
+        forecast_2025 = df[(df['tanggal'].dt.year == 2025) & (df['sumber_data'] == 'prakiraan')].copy()
         
         # Gabungkan (Merge) data Forecast dan Aktual berdasarkan Tanggal dan Lokasi
         eval_df = pd.merge(
@@ -642,7 +751,7 @@ if page == "📊 Ringkasan Eksekutif":
 # ============================================================================
 # PAGE: DETAIL DATA
 # ============================================================================
-elif page == "📋 Detail Data":
+elif page == "Detail Data":
     st.title("Detail Data Prakiraan Titik Panas 2025")
     st.markdown("**Analisis Detail dan Tabel Data Bulanan**")
     st.markdown("---")
@@ -651,11 +760,11 @@ elif page == "📋 Detail Data":
         st.subheader("Ringkasan Bulanan Prakiraan 2025")
         st.info(
             "**Catatan Sumber Data:**\n\n"
-            "• **Titik Panas**: Hasil prakiran model LSTM berdasarkan data historis MODIS/VIIRS 2014-2024\n\n"
+            "• **Titik Panas**: Hasil prakiraan model LSTM berdasarkan data historis MODIS/VIIRS 2014-2024\n\n"
             "• **Curah Hujan**: Data disimulasikan berdasarkan pola musiman historis Kabupaten Kuburaya. "
             "Simulasi menggunakan rata-rata curah hujan musim kemarau (~120 mm) dan musim hujan (~280 mm) "
-            "dengan mempertimbangkan korelasi terhadap jumlah titik panas prakiran.\n\n"
-            "• **Kategori Risiko**: Dihitung berdasarkan threshold dari metode Quartile pada skor risiko prakiran titik panas."
+            "dengan mempertimbangkan korelasi terhadap jumlah titik panas prakiraan.\n\n"
+            "• **Kategori Risiko**: Dihitung berdasarkan threshold dari metode Quartile pada skor risiko prakiraan titik panas."
         )
         # Monthly summary with risk categorization
         monthly_summary = forecast_df.groupby('tanggal').agg({
@@ -726,7 +835,7 @@ elif page == "📋 Detail Data":
         ))
         
         fig_detail.update_layout(
-            title="Prakiran Titik Panas per Bulan (2025)",
+            title="prakiraan Titik Panas per Bulan (2025)",
             xaxis_title="Bulan",
             yaxis_title="Jumlah Titik Panas",
             height=400,
@@ -746,15 +855,15 @@ elif page == "📋 Detail Data":
         }).reset_index()
         
         area_summary = area_summary.sort_values('titik_panas', ascending=False)
-        area_summary.columns = ['Lokasi', 'Total Prakiran Titik Panas (2025)', 'Kategori Risiko Dominan']
-        area_summary['Total Prakiran Titik Panas (2025)'] = area_summary['Total Prakiran Titik Panas (2025)'].round(0).astype(int)
+        area_summary.columns = ['Lokasi', 'Total prakiraan Titik Panas (2025)', 'Kategori Risiko Dominan']
+        area_summary['Total prakiraan Titik Panas (2025)'] = area_summary['Total prakiraan Titik Panas (2025)'].round(0).astype(int)
         
         st.dataframe(area_summary, use_container_width=True, height=400)
         
         
     else:
-        st.warning("Data prakiran 2025 tidak tersedia. Silakan sesuaikan filter rentang waktu.")
-        st.info("Pilih tahun 2025 pada filter sidebar untuk melihat data prakiran.")
+        st.warning("Data prakiraan 2025 tidak tersedia. Silakan sesuaikan filter rentang waktu.")
+        st.info("Pilih tahun 2025 pada filter sidebar untuk melihat data prakiraan.")
 
 
 
@@ -767,7 +876,7 @@ st.sidebar.info(
     "**Cakupan Data:**\n"
     "• 25 blok area Kabupaten Kuburaya\n"
     "• Historis: 2020-2024\n"
-    "• Prakiran: 2025\n\n"
+    "• prakiraan: 2025\n\n"
     "**Model:**\n"
     "• LSTM (Long Short-Term Memory)\n"
     "• Training: Data 2014-2024\n\n"
