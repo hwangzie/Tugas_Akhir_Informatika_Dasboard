@@ -286,7 +286,7 @@ df = load_real_data()
 st.sidebar.title("Navigasi")
 page = st.sidebar.radio(
     "Pilih Halaman:",
-    ["📊 Ringkasan Eksekutif", "📋 Detail Data"]
+    ["Ringkasan Eksekutif", "Detail Data"]
 )
 st.sidebar.markdown("---")
 
@@ -375,7 +375,7 @@ forecast_df = filtered_df[filtered_df['sumber_data'] == 'prakiraan']
 # ============================================================================
 # PAGE: RINGKASAN EKSEKUTIF
 # ============================================================================
-if page == "📊 Ringkasan Eksekutif":
+if page == "Ringkasan Eksekutif":
     # Header
     st.title("Dashboard Forecasting Titik Panas Kabupaten Kuburaya")
     st.markdown("**Sistem Prakiraan dan Monitoring Titik Panas Kabupaten Kuburaya, Kalimantan Barat**")
@@ -400,7 +400,7 @@ if page == "📊 Ringkasan Eksekutif":
     
     # --- Row 1: Realisasi ---
     if has_realisasi:
-        st.markdown("#### 📊 Data Realisasi")
+        st.markdown("#### Data Realisasi")
         col1, col2, col3 = st.columns(3)
         
         with col1:
@@ -439,7 +439,7 @@ if page == "📊 Ringkasan Eksekutif":
     
     # --- Row 2: Forecast ---
     if has_forecast:
-        st.markdown("#### 🔮 Data Prakiraan (Forecast)")
+        st.markdown("#### Data Prakiraan (Forecast)")
         col1, col2, col3 = st.columns(3)
         
         with col1:
@@ -655,7 +655,7 @@ if page == "📊 Ringkasan Eksekutif":
             # st.write(monthly_eval[['tanggal', 'titik_panas_aktual', 'titik_panas']])
             
             # 3. Tampilkan KPI
-            st.markdown("### 📊 Metrik Performa Model")
+            st.markdown("### Metrik Performa Model")
             col1, col2, col3 = st.columns(3)
             
             with col1:
@@ -751,7 +751,7 @@ if page == "📊 Ringkasan Eksekutif":
 # ============================================================================
 # PAGE: DETAIL DATA
 # ============================================================================
-elif page == "📋 Detail Data":
+elif page == "Detail Data":
     st.title("Detail Data Prakiraan Titik Panas 2025")
     st.markdown("**Analisis Detail dan Tabel Data Bulanan**")
     st.markdown("---")
