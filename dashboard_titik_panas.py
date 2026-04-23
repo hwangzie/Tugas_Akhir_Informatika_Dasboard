@@ -375,7 +375,7 @@ forecast_df = filtered_df[filtered_df['sumber_data'] == 'prakiraan']
 # ============================================================================
 # PAGE: RINGKASAN EKSEKUTIF
 # ============================================================================
-if page == "Ringkasan Eksekutif":
+if page == "📊 Ringkasan Eksekutif":
     # Header
     st.title("Dashboard Forecasting Titik Panas Kabupaten Kuburaya")
     st.markdown("**Sistem Prakiraan dan Monitoring Titik Panas Kabupaten Kuburaya, Kalimantan Barat**")
@@ -751,7 +751,7 @@ if page == "Ringkasan Eksekutif":
 # ============================================================================
 # PAGE: DETAIL DATA
 # ============================================================================
-elif page == "Detail Data":
+elif page == "📋 Detail Data":
     st.title("Detail Data Prakiraan Titik Panas 2025")
     st.markdown("**Analisis Detail dan Tabel Data Bulanan**")
     st.markdown("---")
