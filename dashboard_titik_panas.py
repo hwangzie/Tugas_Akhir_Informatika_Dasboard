@@ -48,6 +48,57 @@ def load_real_data():
     # forecast_df = pd.read_csv('improved_monthly_hotspot_forecasts_2025.csv')
     # forecast_df = pd.read_csv('monthly_hotspot_forecasts_2025_new.csv')
     forecast_df = pd.read_csv('monthly_hotspot_forecasts_2025_hyper.csv')
+    
+    # -------------------------------------------------------------------------
+    # Filter prakiraan: hapus tile yang tidak relevan berdasarkan riwayat historis
+    # Kondisi 1: tile tidak pernah ada titik panas sama sekali sepanjang sejarah
+    # Kondisi 2: tile tidak ada titik panas dalam 1 tahun terakhir sebelum forecast
+    # Referensi: hanya data historis sebelum tahun forecast (< 2025)
+    # -------------------------------------------------------------------------
+    tile_cols = [c for c in historical_df.columns if c.startswith('tile_')]
+    
+    # Tentukan tahun forecast dari data forecast
+    forecast_year = pd.to_datetime(forecast_df['year_month']).dt.year.min()
+    
+    # Gunakan HANYA data historis sebelum tahun forecast sebagai referensi
+    hist_dates = pd.to_datetime(historical_df['year_month'])
+    hist_ref = historical_df[hist_dates.dt.year < forecast_year]
+    
+    # Tile yang PERNAH ada titik panas sepanjang seluruh historis (sebelum forecast)
+    ever_active_tiles = set(
+        col for col in tile_cols if hist_ref[col].sum() > 0
+    )
+    
+    # Tentukan rentang 1 tahun terakhir dari data historis referensi
+    ref_dates = hist_dates[hist_dates.dt.year < forecast_year]
+    last_ref_date = ref_dates.max()
+    one_year_ago = last_ref_date - pd.DateOffset(years=2)
+    recent_hist = hist_ref[pd.to_datetime(hist_ref['year_month']) >= one_year_ago]
+    
+    # Tile yang ada titik panas dalam 1 tahun terakhir (sebelum forecast)
+    recent_active_tiles = set(
+        col for col in tile_cols if recent_hist[col].sum() > 0
+    )
+    
+    # Tile yang lolos filter: PERNAH aktif DAN aktif dalam 1 tahun terakhir
+    valid_tiles = ever_active_tiles & recent_active_tiles
+    
+    # Daftar nomor tile yang valid (tile_1 -> 1, dst.)
+    valid_tile_nums = set(int(col.replace('tile_', '')) for col in valid_tiles)
+    
+    # Nol-kan prakiraan untuk tile yang tidak valid
+    for col in tile_cols:
+        tile_num = int(col.replace('tile_', ''))
+        if tile_num not in valid_tile_nums:
+            forecast_df[col] = 0.0
+    
+    # Simpan info tile yang difilter untuk ditampilkan di UI
+    filtered_out_names = [
+        TILE_LOCATION_MAP.get(int(col.replace('tile_', '')), col)
+        for col in tile_cols
+        if int(col.replace('tile_', '')) not in valid_tile_nums
+    ]
+    
     # Load categorical forecast data
     categorical_df = pd.read_csv('categorical_forecasts_2025.csv')
     
@@ -134,11 +185,6 @@ def load_real_data():
         for tile_num in range(1, 26):  # 25 tiles
             tile_col = f'tile_{tile_num}'
             hotspot_count = row[tile_col]
-            
-            # Untuk data prakiraan: bulatkan ke 0 jika nilai < 0.5, 
-            # atau bulatkan ke bilangan bulat terdekat jika >= 0.5
-            if sumber == 'prakiraan':
-                hotspot_count = 0 if hotspot_count < 0.5 else round(hotspot_count)
             
             # Get tile info
             tile_info = tiles_df[tiles_df['id'] == tile_num].iloc[0]
@@ -258,7 +304,7 @@ def load_real_data():
                 'sumber_data': sumber
             })
     
-    return pd.DataFrame(data_list)
+    return pd.DataFrame(data_list), filtered_out_names
 
 @st.cache_data
 def load_validation_data():
@@ -285,7 +331,7 @@ def load_validation_data():
         return None
 
 # Load real data
-df = load_real_data()
+df, filtered_tile_names = load_real_data()
 
 # Page Navigation
 st.sidebar.title("Navigasi")
@@ -306,6 +352,15 @@ st.sidebar.info("""
     - **BA** = Batu Ampar
     - **KB** = Kubu Raya
     """)
+
+# Notifikasi tile yang difilter dari prakiraan
+if filtered_tile_names:
+    st.sidebar.warning(
+        "**ℹ️ Filter Prakiraan Aktif**\n\n"
+        f"Prakiraan untuk **{len(filtered_tile_names)} area** disembunyikan karena "
+        "tidak memiliki riwayat titik panas dalam 1 tahun terakhir sebelum periode prakiraan:\n\n"
+        + "\n".join(f"• {name}" for name in sorted(filtered_tile_names))
+    )
 # Area filter
 
 st.sidebar.markdown("""
@@ -719,39 +774,105 @@ if page == "Ringkasan Eksekutif":
         map_data = filtered_df[filtered_df['tanggal'] == latest_date]
         selected_map_month = latest_date
     
-    # Create map with better zoom settings
-    fig_map = px.scatter_mapbox(
-        map_data,
-        lat='latitude',
-        lon='longitude',
-        size='titik_panas',
-        color='tingkat_risiko',
-        hover_name='area',
-        hover_data=['titik_panas', 'tingkat_risiko'],
-        color_discrete_map={
-            'Rendah': '#2ecc71',
-            'Sedang': '#f39c12', 
-            'Tinggi': '#e74c3c',
-            'Sangat Tinggi': '#c0392b'
-        },
-        title=f"Sebaran Risiko Titik Panas - {selected_map_month.strftime('%B %Y')}",
-        mapbox_style="open-street-map",
-        zoom=8.5,  # Adjusted for better view of entire region
-        center={"lat": -0.35, "lon": 109.2},
-        size_max=30
-    )
+    # ----------------------------------------------------------------
+    # Skala lingkaran yang akurat:
+    # - sizeref GLOBAL: dihitung dari max seluruh data forecast (bukan
+    #   max per bulan) → ukuran konsisten saat ganti bulan
+    # - sizemode 'diameter': proporsi linear (nilai 2x = lingkaran 2x
+    #   lebih besar), bukan 'area' yang pakai sqrt
+    # - Minimum size 8px untuk nilai > 0 agar semua titik aktif terlihat
+    # ----------------------------------------------------------------
+    global_max_hp = df[df['sumber_data'] == 'prakiraan']['titik_panas'].max()
+    if global_max_hp == 0 or pd.isna(global_max_hp):
+        global_max_hp = 1.0
+    
+    SIZE_MAX_PX   = 50   # diameter maksimum (px) untuk nilai terbesar
+    SIZE_MIN_PX   = 10   # diameter minimum (px) untuk nilai > 0
+    
+    # sizeref dengan sizemode='diameter': diameter = val / sizeref
+    # Agar nilai max → SIZE_MAX_PX: sizeref = global_max / SIZE_MAX_PX
+    sizeref_fixed = global_max_hp / SIZE_MAX_PX
+    
+    # Pisahkan: titik aktif (> 0) dan titik nol (hanya untuk referensi posisi)
+    map_active = map_data[map_data['titik_panas'] > 0].copy()
+    map_zero   = map_data[map_data['titik_panas'] == 0].copy()
+    
+    # Hitung size piksel untuk titik aktif, terapkan minimum
+    map_active['_size_px'] = (map_active['titik_panas'] / sizeref_fixed).clip(lower=SIZE_MIN_PX)
+    
+    risk_colors = {
+        'Rendah': '#2ecc71',
+        'Sedang': '#f39c12',
+        'Tinggi': '#e74c3c',
+        'Sangat Tinggi': '#c0392b'
+    }
+    
+    fig_map = go.Figure()
+    
+    # Gambar titik NONFAKTIF kecil abu-abu (opsional, hanya sebagai referensi posisi grid)
+    if len(map_zero) > 0:
+        fig_map.add_trace(go.Scattermapbox(
+            lat=map_zero['latitude'],
+            lon=map_zero['longitude'],
+            mode='markers',
+            marker=dict(size=6, color='rgba(180,180,180,0.35)'),
+            name='Tidak ada titik panas',
+            hovertemplate=(
+                '<b>%{customdata[0]}</b><br>'
+                'Titik Panas: 0<br>'
+                'Status: Tidak aktif'
+                '<extra></extra>'
+            ),
+            customdata=map_zero[['area']].values
+        ))
+    
+    # Gambar titik AKTIF per kategori risiko (agar legenda warna muncul)
+    for risk_level, color in risk_colors.items():
+        subset = map_active[map_active['tingkat_risiko'] == risk_level]
+        if len(subset) == 0:
+            continue
+        fig_map.add_trace(go.Scattermapbox(
+            lat=subset['latitude'],
+            lon=subset['longitude'],
+            mode='markers',
+            marker=dict(
+                size=subset['_size_px'],
+                color=color,
+                sizemode='diameter',      # linear: nilai 2x = lingkaran 2x lebih besar
+                opacity=0.85
+            ),
+            name=risk_level,
+            hovertemplate=(
+                '<b>%{customdata[0]}</b><br>'
+                'Titik Panas: <b>%{customdata[1]:.3f}</b><br>'
+                'Kategori Risiko: %{customdata[2]}<br>'
+                'Latitude: %{lat:.4f}<br>'
+                'Longitude: %{lon:.4f}'
+                '<extra></extra>'
+            ),
+            customdata=subset[['area', 'titik_panas', 'tingkat_risiko', '_size_px']].values
+        ))
     
     fig_map.update_layout(
-        height=700,
+        title=dict(
+            text=f"Sebaran Risiko Titik Panas - {selected_map_month.strftime('%B %Y')}"
+                 f"<br><sup>Skala lingkaran proporsional linear terhadap nilai prakiraan "
+                 f"(sizeref={sizeref_fixed:.4f}, max global={global_max_hp:.3f})</sup>",
+            font=dict(size=15)
+        ),
         mapbox=dict(
+            style='open-street-map',
+            zoom=8.5,
+            center={"lat": -0.35, "lon": 109.2},
             bearing=0,
             pitch=0
-        )
+        ),
+        height=700,
+        legend=dict(title='Kategori Risiko', orientation='v'),
+        margin=dict(l=0, r=0, t=80, b=0)
     )
     
     st.plotly_chart(fig_map, use_container_width=True)
-
-            
 
 # ============================================================================
 # PAGE: DETAIL DATA
