@@ -135,6 +135,11 @@ def load_real_data():
             tile_col = f'tile_{tile_num}'
             hotspot_count = row[tile_col]
             
+            # Untuk data prakiraan: bulatkan ke 0 jika nilai < 0.5, 
+            # atau bulatkan ke bilangan bulat terdekat jika >= 0.5
+            if sumber == 'prakiraan':
+                hotspot_count = 0 if hotspot_count < 0.5 else round(hotspot_count)
+            
             # Get tile info
             tile_info = tiles_df[tiles_df['id'] == tile_num].iloc[0]
             lat = (tile_info['lat_top_left'] + tile_info['lat_bottom_left']) / 2
@@ -761,7 +766,7 @@ elif page == "Detail Data":
         st.info(
             "**Catatan Sumber Data:**\n\n"
             "• **Titik Panas**: Hasil prakiraan model LSTM berdasarkan data historis MODIS/VIIRS 2014-2024\n\n"
-            "• **Curah Hujan**: Data disimulasikan berdasarkan pola musiman historis Kabupaten Kuburaya. "
+            "• **Curah Hujan**: Data disimulasikan berdasarkan pola musiman historis Kabupaten Kuburaya. Sumber: Kuburaya Dalam Angka 2014-2024\n\n"
             "Simulasi menggunakan rata-rata curah hujan musim kemarau (~120 mm) dan musim hujan (~280 mm) "
             "dengan mempertimbangkan korelasi terhadap jumlah titik panas prakiraan.\n\n"
             "• **Kategori Risiko**: Dihitung berdasarkan threshold dari metode Quartile pada skor risiko prakiraan titik panas."
