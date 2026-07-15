@@ -977,11 +977,33 @@ elif page == "Detail Data":
             "• **Kategori Risiko**: Dihitung berdasarkan threshold dari metode Quartile pada skor risiko prakiraan titik panas."
         )
         # Monthly summary with risk categorization
+        # Menggunakan rata-rata risiko tertimbang (weighted) berdasarkan jumlah titik panas per tile.
+        # Tile dengan lebih banyak titik panas memiliki pengaruh lebih besar terhadap risiko bulanan.
+        risk_priority = {'Sangat Tinggi': 4, 'Tinggi': 3, 'Sedang': 2, 'Rendah': 1}
+        
+        def weighted_risk(group):
+            """Hitung kategori risiko bulanan berdasarkan rata-rata tertimbang titik panas"""
+            active = group[group['titik_panas'] > 0]
+            if len(active) == 0:
+                return 'Rendah'
+            scores = active['tingkat_risiko'].map(risk_priority)
+            weighted_avg = (scores * active['titik_panas']).sum() / active['titik_panas'].sum()
+            if weighted_avg >= 2.5:
+                return 'Tinggi'
+            elif weighted_avg >= 1.5:
+                return 'Sedang'
+            else:
+                return 'Rendah'
+        
         monthly_summary = forecast_df.groupby('tanggal').agg({
             'titik_panas': 'sum',
             'curah_hujan': 'mean',
-            'tingkat_risiko': lambda x: x.mode()[0] if len(x) > 0 else 'Rendah'
         }).reset_index()
+        
+        # Hitung risiko tertimbang per bulan
+        monthly_summary['tingkat_risiko'] = forecast_df.groupby('tanggal').apply(
+            weighted_risk
+        ).values
         
         monthly_summary['Bulan'] = monthly_summary['tanggal'].dt.strftime('%B %Y')
         monthly_summary['Titik Panas'] = monthly_summary['titik_panas'].round(0).astype(int)
